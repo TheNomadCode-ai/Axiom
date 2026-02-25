@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<meta charset="UTF-8">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+
+<div class="background"></div>
+<div class="grain"></div>
+
+<div id="desktopCarousel">
+  <div id="carouselTrack">
+    <section class="desktopPage homePage">
+      <div id="mainContainer" class="homeLayout">
+        <div class="homeLeft">
+          <div class="pixelPanel introPanel">
+            <h1 id="greeting"></h1>
+            <div id="time"></div>
+            <div class="moduleHint">Core stack: Editor · Browser · Terminal · Notes · Spotify · Scoped Files</div>
+          </div>
+
+          <div class="pixelPanel quotePanel">
+            <div id="quote"></div>
+          </div>
+
+          <div class="pixelPanel musicPanel" id="musicBlock">
+            <div id="needsText">AXIOM
+
+WHERE FOCUS BECOMES DEFAULT.</div>
+            <div id="ambientVisualizer" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <div class="homeActions">
+              <button id="muteBtn">🔊</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="homeRight">
+          <div class="pixelPanel appHubPanel">
+            <h2 class="panelTitle">Apps</h2>
+            <div class="hubButtons">
+              <button id="openVsCodeBtn"><span class="appIcon">⌨</span><span class="appLabel">VS Code</span></button>
+              <button id="openBrowserPanelBtn"><span class="appIcon">🌐</span><span class="appLabel">Browser</span></button>
+              <button id="openTerminalBtn"><span class="appIcon">>_</span><span class="appLabel">Terminal</span></button>
+              <button id="openNotesPanelBtn"><span class="appIcon">✎</span><span class="appLabel">Notes</span></button>
+              <button id="openSpotifyBtn"><span class="appIcon">♫</span><span class="appLabel">Spotify</span></button>
+              <button id="openFilesPanelBtn"><span class="appIcon">▦</span><span class="appLabel">Files</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div id="toolPanelOverlay" class="hidden">
+  <div class="pixelPanel toolPanel" id="toolPanel">
+    <div class="toolPanelHeader">
+      <h2 class="panelTitle" id="toolPanelTitle">Panel</h2>
+      <button id="closeToolPanelBtn">Close</button>
+    </div>
+
+    <div id="browserPanel" class="toolBody hidden">
+      <div class="browserTools">
+        <input id="browserInput" type="text" placeholder="Search anything or paste URL">
+        <button id="openBrowserBtn">Search</button>
+      </div>
+      <div class="quickLinks">
+        <button class="quickLinkBtn iconQuickBtn" data-url="https://chatgpt.com"><span>✦</span> ChatGPT</button>
+        <button class="quickLinkBtn iconQuickBtn" data-url="https://youtube.com"><span>▶</span> YouTube</button>
+      </div>
+      <div id="browserStatus"></div>
+    </div>
+
+    <div id="notesPanel" class="toolBody hidden">
+      <textarea id="notesInput" placeholder="Write your plan, todos, and quick thoughts..."></textarea>
+      <div id="notesStatus">Not saved yet</div>
+    </div>
+
+    <div id="filesPanel" class="toolBody hidden">
+      <div class="fileTools">
+        <select id="fileScopeSelect">
+          <option value="workspace">Workspace</option>
+          <option value="appData">App Data</option>
+          <option value="art">Art Assets</option>
+          <option value="music">Music Assets</option>
+        </select>
+        <button id="refreshFilesBtn">Refresh</button>
+      </div>
+      <ul id="fileList"></ul>
+      <div id="fileStatus"></div>
+    </div>
+  </div>
+</div>
+
+<div id="pixelBuddy" aria-hidden="true">
+  <div class="buddyText">Back to work.</div>
+  <div class="buddyDesk"></div>
+  <div class="buddyChair"></div>
+  <div class="buddyHead">
+    <div class="buddyHeadphones"></div>
+    <div class="buddyEye" id="buddyEyeLeft"></div>
+    <div class="buddyEye" id="buddyEyeRight"></div>
+  </div>
+  <div class="buddyBody"></div>
+  <div class="buddyLaptop"></div>
+</div>
+
+<div id="volumeRail">
+  <label for="volumeSlider">Volume</label>
+  <input id="volumeSlider" type="range" min="0" max="100" value="35">
+</div>
+
+<div id="focusTimer">
+  <div id="timerValue">00:00</div>
+  <button id="restToggleBtn">Take Rest</button>
+</div>
+
+<audio id="bgMusic" loop></audio>
+
+<script src="renderer.js"></script>
+
+</body>
+</html>

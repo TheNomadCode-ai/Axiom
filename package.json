@@ -25,6 +25,11 @@
     "directories": {
       "buildResources": "assets"
     },
+    "publish": {
+      "provider": "github",
+      "owner": "TheNomadCode-ai",
+      "repo": "Axiom"
+    },
     "win": {
       "target": "nsis"
     }
@@ -37,6 +42,7 @@
     "axios": "^1.13.5",
     "dotenv": "^17.3.1",
     "electron-store": "^8.1.0",
+    "electron-updater": "^6.8.3",
     "express": "^5.2.1"
   }
 }

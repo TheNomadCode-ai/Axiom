@@ -3,6 +3,7 @@ const path = require("path")
 const fs = require("fs")
 const { exec } = require("child_process")
 const Store = require("electron-store")
+const { autoUpdater } = require("electron-updater")
 const { startMusicServer } = require("./music-server")
 
 let musicServer
@@ -176,6 +177,39 @@ function registerIpcHandlers() {
   })
 }
 
+function setupAutoUpdates() {
+  if (!app.isPackaged) {
+    return
+  }
+
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on("checking-for-update", () => {
+    console.log("AutoUpdate: checking for updates")
+  })
+
+  autoUpdater.on("update-available", (info) => {
+    console.log("AutoUpdate: update available", info?.version)
+  })
+
+  autoUpdater.on("update-not-available", () => {
+    console.log("AutoUpdate: no update available")
+  })
+
+  autoUpdater.on("error", (error) => {
+    console.error("AutoUpdate error:", error?.message || error)
+  })
+
+  autoUpdater.on("update-downloaded", (info) => {
+    console.log("AutoUpdate: downloaded", info?.version)
+  })
+
+  autoUpdater.checkForUpdates().catch((error) => {
+    console.error("AutoUpdate check failed:", error?.message || error)
+  })
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1200,
@@ -214,6 +248,7 @@ process.on("unhandledRejection", (error) => {
 
 app.whenReady().then(() => {
   registerIpcHandlers()
+  setupAutoUpdates()
   musicServer = startMusicServer()
   createWindow()
 })

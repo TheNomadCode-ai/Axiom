@@ -13,6 +13,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   const volumeSlider = document.getElementById("volumeSlider")
   const timerValue = document.getElementById("timerValue")
   const restToggleBtn = document.getElementById("restToggleBtn")
+  const licenseOverlay = document.getElementById("licenseOverlay")
+  const licenseKeyInput = document.getElementById("licenseKeyInput")
+  const licenseEmailInput = document.getElementById("licenseEmailInput")
+  const activateLicenseBtn = document.getElementById("activateLicenseBtn")
+  const buyLicenseBtn = document.getElementById("buyLicenseBtn")
+  const licenseStatus = document.getElementById("licenseStatus")
 
   const openVsCodeBtn = document.getElementById("openVsCodeBtn")
   const openBrowserPanelBtn = document.getElementById("openBrowserPanelBtn")
@@ -50,12 +56,57 @@ document.addEventListener("DOMContentLoaded", async () => {
   let restStartedAt = null
   let pausedAccumulated = 0
   let mediaInfo = { ambientPath: "", coverPath: "", lastSong: "" }
+  let licenseContext = { active: false, buyUrl: "https://gumroad.com" }
 
   function toPlayableSrc(filePath) {
     if (!filePath) return ""
     if (/^https?:\/\//i.test(filePath) || /^file:\/\//i.test(filePath)) return filePath
     const normalized = String(filePath).replace(/\\/g, "/")
     return encodeURI(`file://${normalized}`)
+  }
+
+  function setLicenseStatus(text) {
+    if (licenseStatus) {
+      licenseStatus.innerText = text
+    }
+  }
+
+  async function ensureLicenseActivation() {
+    try {
+      licenseContext = await api.getLicenseStatus()
+    } catch {
+      licenseContext = { active: false, buyUrl: "https://gumroad.com" }
+    }
+
+    if (licenseContext.active) {
+      return true
+    }
+
+    licenseOverlay.classList.remove("hidden")
+    setLicenseStatus("Activation required")
+
+    return new Promise((resolve) => {
+      activateLicenseBtn.onclick = async () => {
+        const key = String(licenseKeyInput.value || "").trim()
+        const email = String(licenseEmailInput.value || "").trim()
+
+        setLicenseStatus("Verifying license...")
+        const result = await api.activateLicense(key, email)
+        if (!result?.ok) {
+          setLicenseStatus(result?.error || "Activation failed")
+          return
+        }
+
+        setLicenseStatus("Activated")
+        licenseOverlay.classList.add("hidden")
+        resolve(true)
+      }
+
+      buyLicenseBtn.onclick = () => {
+        const target = licenseContext.buyUrl || "https://gumroad.com"
+        api.openExternal(target)
+      }
+    })
   }
 
   async function hydrateSettings() {
@@ -508,6 +559,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   } catch {
     mediaInfo = { ambientPath: "", coverPath: "", lastSong: "" }
   }
+
+  await ensureLicenseActivation()
 
   await hydrateSettings()
   setBaseVolume(volumeSlider.value)

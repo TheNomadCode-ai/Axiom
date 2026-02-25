@@ -15,5 +15,9 @@ contextBridge.exposeInMainWorld("axiom", {
 	launchTerminal: () => ipcRenderer.invoke("launch:terminal"),
 	launchSpotify: () => ipcRenderer.invoke("launch:spotify"),
 
-	getMediaInfo: () => ipcRenderer.invoke("media:getInfo")
+	getMediaInfo: () => ipcRenderer.invoke("media:getInfo"),
+
+	getLicenseStatus: () => ipcRenderer.invoke("license:getStatus"),
+	activateLicense: (key, email) => ipcRenderer.invoke("license:activate", key, email),
+	deactivateLicense: () => ipcRenderer.invoke("license:deactivate")
 })

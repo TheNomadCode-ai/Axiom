@@ -1,10 +1,12 @@
 const { app, BrowserWindow, ipcMain, shell } = require("electron")
 const path = require("path")
 const fs = require("fs")
+const axios = require("axios")
 const { exec } = require("child_process")
 const Store = require("electron-store")
 const { autoUpdater } = require("electron-updater")
 const { startMusicServer } = require("./music-server")
+require("dotenv").config({ path: path.join(__dirname, ".env") })
 
 let musicServer
 
@@ -15,9 +17,65 @@ const settingsStore = new Store({
     theme: "dark",
     volume: 35,
     lastSong: "Marconi Union - Weightless",
-    location: ""
+    location: "",
+    license: {
+      active: false,
+      key: "",
+      email: "",
+      validatedAt: ""
+    }
   }
 })
+
+function getLicenseConfig() {
+  return {
+    productPermalink: process.env.GUMROAD_PRODUCT_PERMALINK || "",
+    buyUrl: process.env.GUMROAD_BUY_URL || "",
+    verifyUrl: process.env.GUMROAD_VERIFY_URL || "https://api.gumroad.com/v2/licenses/verify"
+  }
+}
+
+async function validateLicenseWithGumroad(licenseKey, email) {
+  const config = getLicenseConfig()
+  if (!config.productPermalink) {
+    return { ok: false, error: "License server not configured" }
+  }
+
+  try {
+    const response = await axios.post(
+      config.verifyUrl,
+      new URLSearchParams({
+        product_permalink: config.productPermalink,
+        license_key: licenseKey,
+        increment_uses_count: "false"
+      }).toString(),
+      {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        timeout: 12000
+      }
+    )
+
+    const purchase = response.data?.purchase
+    if (!response.data?.success || !purchase) {
+      return { ok: false, error: "Invalid license key" }
+    }
+
+    if (purchase.refunded || purchase.chargebacked || purchase.disputed) {
+      return { ok: false, error: "License is not valid for activation" }
+    }
+
+    if (email && purchase.email && String(purchase.email).toLowerCase() !== String(email).toLowerCase()) {
+      return { ok: false, error: "Email does not match this license" }
+    }
+
+    return {
+      ok: true,
+      email: purchase.email || email || ""
+    }
+  } catch {
+    return { ok: false, error: "License verification failed" }
+  }
+}
 
 function getAppDataDir() {
   const target = path.join(app.getPath("userData"), "app-data")
@@ -174,6 +232,49 @@ function registerIpcHandlers() {
       coverPath,
       lastSong: settingsStore.get("lastSong")
     }
+  })
+
+  ipcMain.handle("license:getStatus", () => {
+    const license = settingsStore.get("license") || {}
+    const config = getLicenseConfig()
+    return {
+      active: Boolean(license.active),
+      email: license.email || "",
+      buyUrl: config.buyUrl || "https://gumroad.com"
+    }
+  })
+
+  ipcMain.handle("license:activate", async (_, rawKey, rawEmail) => {
+    const licenseKey = String(rawKey || "").trim()
+    const email = String(rawEmail || "").trim()
+
+    if (!licenseKey || licenseKey.length < 8) {
+      return { ok: false, error: "Enter a valid license key" }
+    }
+
+    const result = await validateLicenseWithGumroad(licenseKey, email)
+    if (!result.ok) {
+      return result
+    }
+
+    settingsStore.set("license", {
+      active: true,
+      key: licenseKey,
+      email: result.email || email,
+      validatedAt: new Date().toISOString()
+    })
+
+    return { ok: true }
+  })
+
+  ipcMain.handle("license:deactivate", () => {
+    settingsStore.set("license", {
+      active: false,
+      key: "",
+      email: "",
+      validatedAt: ""
+    })
+    return true
   })
 }
 

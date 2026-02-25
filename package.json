@@ -1,21 +1,42 @@
 {
-  "name": "bootup-app",
-  "version": "1.0.0",
-  "description": "",
+  "name": "axiom",
+  "version": "1.0.1",
+  "description": "Axiom focus-first Electron desktop",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "build": {
+    "appId": "com.axiom.desktop",
+    "productName": "Axiom",
+    "files": [
+      "**/*",
+      "!app-data/**/*",
+      "!.env",
+      "!dist/**/*"
+    ],
+    "directories": {
+      "buildResources": "assets"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  },
   "devDependencies": {
-    "electron": "^40.6.0"
+    "electron": "^40.6.0",
+    "electron-builder": "^26.8.1"
   },
   "dependencies": {
     "axios": "^1.13.5",
     "dotenv": "^17.3.1",
+    "electron-store": "^8.1.0",
     "express": "^5.2.1"
   }
 }

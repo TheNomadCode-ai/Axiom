@@ -1,10 +1,6 @@
-const fs = require("fs")
-const path = require("path")
-const { pathToFileURL } = require("url")
-const { shell } = require("electron")
-const { exec } = require("child_process")
+document.addEventListener("DOMContentLoaded", async () => {
+  const api = window.axiom
 
-document.addEventListener("DOMContentLoaded", () => {
   const desktopCarousel = document.getElementById("desktopCarousel")
   const mainContainer = document.getElementById("mainContainer")
 
@@ -47,43 +43,32 @@ document.addEventListener("DOMContentLoaded", () => {
   const buddyEyeLeft = document.getElementById("buddyEyeLeft")
   const buddyEyeRight = document.getElementById("buddyEyeRight")
 
-  const appDataDir = path.join(__dirname, "app-data")
-  const notesPath = path.join(appDataDir, "notes.md")
-  const defaultCoverPath = path.join(__dirname, "assets", "art", "default.png")
-  const defaultAmbientPath = resolveDefaultAmbientTrack()
-
   let notesSaveTimer = null
   let baseVolume = 0.35
   let focusStart = Date.now()
   let isResting = false
   let restStartedAt = null
   let pausedAccumulated = 0
+  let mediaInfo = { ambientPath: "", coverPath: "", lastSong: "" }
 
-  if (!fs.existsSync(appDataDir)) {
-    fs.mkdirSync(appDataDir)
+  function toPlayableSrc(filePath) {
+    if (!filePath) return ""
+    if (/^https?:\/\//i.test(filePath) || /^file:\/\//i.test(filePath)) return filePath
+    const normalized = String(filePath).replace(/\\/g, "/")
+    return encodeURI(`file://${normalized}`)
   }
 
-  function toPlayableSrc(src) {
-    if (/^https?:\/\//i.test(src)) return src
-    if (path.isAbsolute(src)) return pathToFileURL(src).href
-    return src
-  }
-
-  function resolveDefaultAmbientTrack() {
-    const musicDir = path.join(__dirname, "assets", "music")
-    if (!fs.existsSync(musicDir)) {
-      return ""
-    }
-
+  async function hydrateSettings() {
     try {
-      const files = fs.readdirSync(musicDir)
-      const preferred = files.find((fileName) => /marconi\s*union.*weightless/i.test(fileName))
-      if (preferred) return path.join(musicDir, preferred)
-
-      const fallback = files.find((fileName) => /\.(mp3|wav|ogg|m4a)$/i.test(fileName))
-      return fallback ? path.join(musicDir, fallback) : ""
+      const settings = await api.getSettings()
+      if (settings && Number.isFinite(Number(settings.volume))) {
+        volumeSlider.value = String(settings.volume)
+      }
+      if (settings && settings.userName) {
+        greetingEl.dataset.userName = settings.userName
+      }
     } catch {
-      return ""
+      volumeSlider.value = "35"
     }
   }
 
@@ -112,17 +97,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }, stepDuration)
   }
 
-  function startAmbientFlow() {
-    if (!defaultAmbientPath || !fs.existsSync(defaultAmbientPath)) {
+  async function startAmbientFlow() {
+    if (!mediaInfo.ambientPath) {
+      quoteEl.innerText = "Offline mode: ambient track unavailable."
       return
     }
 
-    player.src = toPlayableSrc(defaultAmbientPath)
+    player.src = toPlayableSrc(mediaInfo.ambientPath)
     player.loop = true
     player.volume = 0
-    player.play().then(() => {
+
+    try {
+      await player.play()
       document.body.classList.add("ambient-playing")
       fadeInAudio(900)
+      api.updateSettings({ lastSong: mediaInfo.lastSong || "Marconi Union - Weightless" })
 
       setTimeout(() => {
         pixelBuddy.classList.add("working")
@@ -135,7 +124,9 @@ document.addEventListener("DOMContentLoaded", () => {
           document.body.classList.add("apps-ready")
         }
       }, 4200)
-    }).catch(() => {})
+    } catch {
+      quoteEl.innerText = "Audio playback blocked. Click anywhere then toggle mute to start."
+    }
   }
 
   function updateTimer() {
@@ -144,12 +135,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (isResting && restStartedAt) {
       elapsedMs -= now - restStartedAt
     }
-    const totalSeconds = Math.floor(elapsedMs / 1000)
+    const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000))
     const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0")
     const seconds = String(totalSeconds % 60).padStart(2, "0")
-    if (timerValue) {
-      timerValue.innerText = `${minutes}:${seconds}`
-    }
+    timerValue.innerText = `${minutes}:${seconds}`
   }
 
   function setRestState(resting) {
@@ -164,22 +153,18 @@ document.addEventListener("DOMContentLoaded", () => {
       restStartedAt = null
     }
 
-    if (pixelBuddy) {
-      if (resting) {
-        pixelBuddy.classList.remove("working")
+    if (resting) {
+      pixelBuddy.classList.remove("working")
+      pixelBuddy.classList.remove("speaking")
+    } else {
+      pixelBuddy.classList.add("working")
+      pixelBuddy.classList.add("speaking")
+      setTimeout(() => {
         pixelBuddy.classList.remove("speaking")
-      } else {
-        pixelBuddy.classList.add("working")
-        pixelBuddy.classList.add("speaking")
-        setTimeout(() => {
-          pixelBuddy.classList.remove("speaking")
-        }, 2000)
-      }
+      }, 2000)
     }
 
-    if (restToggleBtn) {
-      restToggleBtn.innerText = resting ? "Back to Work" : "Take Rest"
-    }
+    restToggleBtn.innerText = resting ? "Back to Work" : "Take Rest"
   }
 
   function updateClock() {
@@ -196,22 +181,10 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (hour >= 22 || hour < 5) greet = "Good night"
 
     const funnyLines = hour < 12
-      ? [
-          "Coffee loaded. Bugs trembling.",
-          "You beat the snooze button. Legendary.",
-          "Morning build incoming. Stay brave."
-        ]
+      ? ["Coffee loaded. Bugs trembling.", "You beat the snooze button. Legendary.", "Morning build incoming. Stay brave."]
       : hour < 18
-        ? [
-            "Productivity patch applied.",
-            "You vs deadlines: stylish edition.",
-            "Another tab? Obviously yes."
-          ]
-        : [
-            "Night mode: activated and dramatic.",
-            "If it compiles at midnight, it is art.",
-            "Moonlight and merge conflicts."
-          ]
+        ? ["Productivity patch applied.", "You vs deadlines: stylish edition.", "Another tab? Obviously yes."]
+        : ["Night mode: activated and dramatic.", "If it compiles at midnight, it is art.", "Moonlight and merge conflicts."]
 
     const funny = funnyLines[Math.floor(Math.random() * funnyLines.length)]
     greetingEl.innerText = `${greet}. ${funny}`
@@ -225,28 +198,36 @@ document.addEventListener("DOMContentLoaded", () => {
       .trim()
   }
 
-  function setupQuote() {
-    fetch("https://zenquotes.io/api/random")
-      .then((response) => response.json())
-      .then((data) => {
-        if (Array.isArray(data) && data[0]?.q) {
-          const quote = normalizeQuoteText(data[0].q)
-          const author = data[0].a ? ` — ${data[0].a}` : ""
-          quoteEl.innerText = `${quote}${author}`
-          return
-        }
-        quoteEl.innerText = ""
-      })
-      .catch(() => {
-        quoteEl.innerText = ""
-      })
+  async function setupQuote() {
+    if (!navigator.onLine) {
+      quoteEl.innerText = "Offline mode — focus mode active."
+      return
+    }
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
+
+    try {
+      const response = await fetch("https://zenquotes.io/api/random", { signal: controller.signal })
+      const data = await response.json()
+      if (Array.isArray(data) && data[0]?.q) {
+        const quote = normalizeQuoteText(data[0].q)
+        const author = data[0].a ? ` — ${data[0].a}` : ""
+        quoteEl.innerText = `${quote}${author}`
+      } else {
+        quoteEl.innerText = "Quote unavailable right now."
+      }
+    } catch {
+      quoteEl.innerText = navigator.onLine ? "Quote unavailable right now." : "Offline mode — focus mode active."
+    } finally {
+      clearTimeout(timeout)
+    }
   }
 
   function setupDesktopLaunchers() {
-    openVsCodeBtn.onclick = () => {
-      shell.openExternal("vscode://")
-      exec("code .", { cwd: __dirname }, () => {})
-    }
+    openVsCodeBtn.onclick = () => api.launchVsCode()
+    openTerminalBtn.onclick = () => api.launchTerminal()
+    openSpotifyBtn.onclick = () => api.launchSpotify()
 
     openBrowserBtn.onclick = () => {
       openControlledUrl(browserInput?.value || "https://developer.mozilla.org")
@@ -263,26 +244,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (event.key === "Enter") {
           openControlledUrl(browserInput.value)
         }
-      })
-    }
-
-    openTerminalBtn.onclick = () => {
-      if (process.platform === "win32") {
-        exec("start wt", () => {
-          exec("start powershell", () => {})
-        })
-        return
-      }
-      if (process.platform === "darwin") {
-        exec("open -a Terminal .", () => {})
-        return
-      }
-      exec("x-terminal-emulator", () => {})
-    }
-
-    openSpotifyBtn.onclick = () => {
-      shell.openExternal("spotify:").catch(() => {
-        shell.openExternal("https://open.spotify.com")
       })
     }
 
@@ -338,53 +299,35 @@ document.addEventListener("DOMContentLoaded", () => {
     fileStatus.innerText = text
   }
 
-  function getScopePath(scopeKey) {
-    const scopeMap = {
-      workspace: __dirname,
-      appData: appDataDir,
-      art: path.join(__dirname, "assets", "art"),
-      music: path.join(__dirname, "assets", "music")
-    }
-
-    return scopeMap[scopeKey] || __dirname
-  }
-
-  function isAllowedFileName(fileName) {
-    const allowedExtensions = new Set([".md", ".txt", ".json", ".js", ".css", ".html", ".jpg", ".jpeg", ".png", ".mp3", ".wav"])
-    return allowedExtensions.has(path.extname(fileName).toLowerCase())
-  }
-
-  function renderFileRows(directoryPath) {
+  async function renderFileRows(scopeKey) {
     fileList.innerHTML = ""
 
-    let entries = []
+    let files = []
     try {
-      entries = fs.readdirSync(directoryPath, { withFileTypes: true })
+      files = await api.listFiles(scopeKey)
     } catch {
       updateFileStatus("Cannot access selected folder")
       return
     }
 
-    const files = entries.filter((entry) => entry.isFile() && isAllowedFileName(entry.name)).slice(0, 40)
     if (!files.length) {
       updateFileStatus("No allowed files in this scope")
       return
     }
 
-    files.forEach((entry) => {
+    files.forEach((fileName) => {
       const item = document.createElement("li")
       item.className = "fileRow"
 
       const fileNameEl = document.createElement("span")
       fileNameEl.className = "fileName"
-      fileNameEl.innerText = entry.name
+      fileNameEl.innerText = fileName
 
       const openBtn = document.createElement("button")
       openBtn.className = "openFileBtn"
       openBtn.innerText = "Open"
-      openBtn.addEventListener("click", () => {
-        const fullPath = path.join(directoryPath, entry.name)
-        shell.openPath(fullPath)
+      openBtn.addEventListener("click", async () => {
+        await api.openFile(fileScopeSelect.value, fileName)
       })
 
       item.appendChild(fileNameEl)
@@ -395,14 +338,8 @@ document.addEventListener("DOMContentLoaded", () => {
     updateFileStatus(`Showing ${files.length} file(s)`)
   }
 
-  function refreshScopedFiles() {
-    const scopePath = getScopePath(fileScopeSelect.value)
-    if (!fs.existsSync(scopePath)) {
-      fileList.innerHTML = ""
-      updateFileStatus("Scope folder does not exist")
-      return
-    }
-    renderFileRows(scopePath)
+  async function refreshScopedFiles() {
+    await renderFileRows(fileScopeSelect.value)
   }
 
   function setupScopedFileAccess() {
@@ -431,7 +368,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return /^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(text)
   }
 
-  function openControlledUrl(rawUrl) {
+  async function openControlledUrl(rawUrl) {
     const inputValue = String(rawUrl || "").trim()
     if (!inputValue) {
       browserStatus.innerText = "Type something to search or open."
@@ -442,21 +379,18 @@ document.addEventListener("DOMContentLoaded", () => {
       ? ensureProtocol(inputValue)
       : `https://www.google.com/search?q=${encodeURIComponent(inputValue)}`
 
-    if (!normalized) {
-      browserStatus.innerText = "Enter a URL to open."
-      return
-    }
-
     try {
       const parsed = new URL(normalized)
       const hostname = parsed.hostname.toLowerCase()
       if (isBlockedHostname(hostname)) {
-        browserStatus.innerText = "Blocked by productivity policy. Choose docs/research resources only."
+        browserStatus.innerText = "Blocked by productivity policy."
         return
       }
 
-      shell.openExternal(parsed.href)
-      browserStatus.innerText = looksLikeUrl(inputValue) ? `Opened ${hostname}` : `Searched: ${inputValue}`
+      const ok = await api.openExternal(parsed.href)
+      browserStatus.innerText = ok
+        ? (looksLikeUrl(inputValue) ? `Opened ${hostname}` : `Searched: ${inputValue}`)
+        : "Blocked by app security policy."
     } catch {
       browserStatus.innerText = "Invalid URL."
     }
@@ -466,22 +400,18 @@ document.addEventListener("DOMContentLoaded", () => {
     notesStatus.innerText = text
   }
 
-  function loadNotes() {
+  async function loadNotes() {
     try {
-      if (fs.existsSync(notesPath)) {
-        notesInput.value = fs.readFileSync(notesPath, "utf8")
-        updateNotesStatus("Loaded local notes")
-      } else {
-        updateNotesStatus("Ready to capture")
-      }
+      notesInput.value = await api.loadNotes()
+      updateNotesStatus(notesInput.value ? "Loaded local notes" : "Ready to capture")
     } catch {
       updateNotesStatus("Failed to load notes")
     }
   }
 
-  function saveNotesNow() {
+  async function saveNotesNow() {
     try {
-      fs.writeFileSync(notesPath, notesInput.value, "utf8")
+      await api.saveNotes(notesInput.value)
       updateNotesStatus(`Saved ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`)
     } catch {
       updateNotesStatus("Save failed")
@@ -502,9 +432,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const maxEyeShift = 2.8
 
     document.addEventListener("mousemove", (event) => {
-      if (pixelBuddy.classList.contains("working")) {
-        return
-      }
+      if (pixelBuddy.classList.contains("working")) return
+
       const normalizedX = Math.max(-1, Math.min(1, (event.clientX - window.innerWidth / 2) / (window.innerWidth / 2)))
       const normalizedY = Math.max(-1, Math.min(1, (event.clientY - (window.innerHeight - 90)) / 180))
 
@@ -554,14 +483,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
   volumeSlider.addEventListener("input", () => {
     setBaseVolume(volumeSlider.value)
+    api.updateSettings({ volume: Number(volumeSlider.value) })
   })
 
-  if (restToggleBtn) {
-    restToggleBtn.addEventListener("click", () => {
-      setRestState(!isResting)
-    })
+  restToggleBtn.addEventListener("click", () => {
+    setRestState(!isResting)
+  })
+
+  window.addEventListener("offline", () => {
+    browserStatus.innerText = "Offline mode"
+    quoteEl.innerText = "Offline mode — focus mode active."
+  })
+
+  window.addEventListener("error", (event) => {
+    console.error("Renderer error:", event.message)
+  })
+
+  window.addEventListener("unhandledrejection", (event) => {
+    console.error("Renderer unhandled rejection:", event.reason)
+  })
+
+  try {
+    mediaInfo = await api.getMediaInfo()
+  } catch {
+    mediaInfo = { ambientPath: "", coverPath: "", lastSong: "" }
   }
 
+  await hydrateSettings()
   setBaseVolume(volumeSlider.value)
   updateClock()
   setInterval(updateClock, 1000)
